@@ -275,6 +275,11 @@ void renderEsp() {
 		}
 
 		Vector3 head_position = getBonePosition(enemy, 8); // 8 = head bone
+		Vector3 root_position = read<Vector3>(g_pid, enemy.root_component_ptr + offsets::root_position);
+		if (head_position.z <= root_position.z) {
+			continue;
+		}
+
 		Vector2 head_at_screen_vec = worldToScreen(head_position, camera_position, camera_rotation, camera_fov);
 		ImVec2 head_at_screen = ImVec2(head_at_screen_vec.x, head_at_screen_vec.y);
 		float distance_modifier = camera_position.Distance(head_position) * 0.001;
