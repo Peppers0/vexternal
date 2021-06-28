@@ -39,6 +39,7 @@ ImU32 g_color_white = ImGui::ColorConvertFloat4ToU32(ImVec4(1, 1, 1, 1));
 // Cheat toggle values
 bool g_overlay_visible{ false };
 bool g_esp_enabled{ true };
+bool g_esp_dormantcheck{ false };
 bool g_headesp{ true };
 bool g_boneesp{ true };
 bool g_boxesp{ true };
@@ -411,12 +412,14 @@ void renderEsp() {
 			continue;
 		}
 
-		float last_render_time = Driver::read<float>(g_pid, enemy.mesh_ptr + 0x350);
-		float last_submit_time = Driver::read<float>(g_pid, enemy.mesh_ptr + 0x358);
-		bool is_visible = last_render_time + 0.06F >= last_submit_time;
-		bool dormant = Driver::read<bool>(g_pid, enemy.actor_ptr + 0x100);
-		if (dormant || !is_visible) {
-			continue;
+		if (g_esp_dormantcheck) {
+			float last_render_time = Driver::read<float>(g_pid, enemy.mesh_ptr + 0x350);
+			float last_submit_time = Driver::read<float>(g_pid, enemy.mesh_ptr + 0x358);
+			bool is_visible = last_render_time + 0.06F >= last_submit_time;
+			bool dormant = Driver::read<bool>(g_pid, enemy.actor_ptr + 0x100);
+			if (!dormant || !is_visible) {
+				continue;
+			}
 		}
 
 		Vector2 head_at_screen_vec = worldToScreen(head_position, camera_position, camera_rotation, camera_fov);
@@ -449,13 +452,11 @@ void runRenderTick() {
 	if (g_overlay_visible) {
 		// Visuals Window
 		{
-			static float f = 0.0f;
-			static int counter = 0;
-
 			ImGui::Begin("Visuals", nullptr, ImGuiWindowFlags_NoResize);
-			ImGui::SetWindowSize("Visuals", ImVec2(200, 148));
+			ImGui::SetWindowSize("Visuals", ImVec2(200, 176));
 
 			ImGui::Checkbox("ESP", &g_esp_enabled);
+			ImGui::Checkbox("ESP Dormant Check", &g_esp_dormantcheck);
 			ImGui::Checkbox("Head ESP", &g_headesp);
 			ImGui::Checkbox("Bone ESP", &g_boneesp);
 			ImGui::Checkbox("Box ESP", &g_boxesp);
