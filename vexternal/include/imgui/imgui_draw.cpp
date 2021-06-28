@@ -568,9 +568,9 @@ int ImDrawList::_CalcCircleAutoSegmentCount(float radius) const
 {
     // Automatic segment count
     const int radius_idx = (int)(radius + 0.999999f); // ceil to never reduce accuracy
-    if (radius_idx < IM_ARRAYSIZE(_Data->CircleSegmentCounts))
+    /*if (radius_idx < IM_ARRAYSIZE(_Data->CircleSegmentCounts))
         return _Data->CircleSegmentCounts[radius_idx]; // Use cached value
-    else
+    else*/
         return IM_DRAWLIST_CIRCLE_AUTO_SEGMENT_CALC(radius, _Data->CircleSegmentMaxError);
 }
 

@@ -19,10 +19,12 @@ struct State {
 typedef struct {
 	uintptr_t actor_ptr;
 	uintptr_t damage_handler_ptr;
+	uintptr_t player_state_ptr;
 	uintptr_t root_component_ptr;
 	uintptr_t mesh_ptr;
 	uintptr_t bone_array_ptr;
 	int bone_count;
+	bool is_visible;
 } Enemy;
 
 // Window / Process values
@@ -32,10 +34,14 @@ int g_height;
 int g_pid;
 uintptr_t g_base_address;
 ImU32 g_esp_color = ImGui::ColorConvertFloat4ToU32(ImVec4(1, 0, 0.4F, 1));
+ImU32 g_color_white = ImGui::ColorConvertFloat4ToU32(ImVec4(1, 1, 1, 1));
 
 // Cheat toggle values
 bool g_overlay_visible{ false };
 bool g_esp_enabled{ true };
+bool g_headesp{ true };
+bool g_boneesp{ true };
+bool g_boxesp{ true };
 
 // Pointers
 uintptr_t g_local_player_controller;
@@ -172,7 +178,15 @@ uintptr_t decryptWorld(uintptr_t pid, uintptr_t base_address) {
 	return read<uintptr_t>(pid, uworld_ptr);
 }
 
-std::vector<Enemy> retreiveValidEnemys(uintptr_t actor_array, int actor_count) {
+
+struct FText
+{
+	char _padding_[0x28];
+	PWCHAR Name;
+	DWORD Length;
+};
+
+std::vector<Enemy> retreiveValidEnemies(uintptr_t actor_array, int actor_count) {
 	std::vector<Enemy> temp_enemy_collection{};
 	size_t size = sizeof(uintptr_t);
 	for (int i = 0; i < actor_count; i++) {
@@ -189,8 +203,8 @@ std::vector<Enemy> retreiveValidEnemys(uintptr_t actor_array, int actor_count) {
 			continue;
 		}
 
-		uintptr_t entity_state = read<uintptr_t>(g_pid, actor + offsets::player_state);
-		uintptr_t team_component = read<uintptr_t>(g_pid, entity_state + offsets::team_component);
+		uintptr_t player_state = read<uintptr_t>(g_pid, actor + offsets::player_state);
+		uintptr_t team_component = read<uintptr_t>(g_pid, player_state + offsets::team_component);
 		int team_id = read<int>(g_pid, team_component + offsets::team_id);
 		int bone_count = read<int>(g_pid, mesh + offsets::bone_count);
 		bool is_bot = bone_count == 103;
@@ -205,10 +219,12 @@ std::vector<Enemy> retreiveValidEnemys(uintptr_t actor_array, int actor_count) {
 		Enemy enemy{
 			actor,
 			damage_handler,
+			player_state,
 			root_component,
 			mesh,
 			bone_array,
-			bone_count
+			bone_count,
+			true
 		};
 
 		temp_enemy_collection.push_back(enemy);
@@ -244,7 +260,7 @@ void retreiveData() {
 		g_camera_manager = camera_manager;
 		g_local_team_id = local_team_id;
 
-		enemy_collection = retreiveValidEnemys(actor_array, actor_count);
+		enemy_collection = retreiveValidEnemies(actor_array, actor_count);
 		Sleep(2500);
 	}
 }
@@ -255,6 +271,121 @@ Vector3 getBonePosition(Enemy enemy, int index) {
 	FTransform componentToWorld = read<FTransform>(g_pid, enemy.mesh_ptr + offsets::component_to_world);
 	D3DMATRIX matrix = MatrixMultiplication(firstBone.ToMatrixWithScale(), componentToWorld.ToMatrixWithScale());
 	return Vector3(matrix._41, matrix._42, matrix._43);
+}
+
+void renderBoneLine(Vector3 first_bone_position, Vector3 second_bone_position, Vector3 position, Vector3 rotation, float fov) {
+	Vector2 first_bone_screen_position = worldToScreen(first_bone_position, position, rotation, fov);
+	ImVec2 fist_screen_position = ImVec2(first_bone_screen_position.x, first_bone_screen_position.y);
+	Vector2 second_bone_screen_position = worldToScreen(second_bone_position, position, rotation, fov);
+	ImVec2 second_screen_position = ImVec2(second_bone_screen_position.x, second_bone_screen_position.y);
+	ImGui::GetOverlayDrawList()->AddLine(fist_screen_position, second_screen_position, g_color_white);
+}
+
+void renderBones(Enemy enemy, Vector3 position, Vector3 rotation, float fov) {
+	Vector3 head_position = getBonePosition(enemy, 8);
+	Vector3 neck_position;
+	Vector3 chest_position = getBonePosition(enemy, 6);
+	Vector3 l_upper_arm_position;
+	Vector3 l_fore_arm_position;
+	Vector3 l_hand_position;
+	Vector3 r_upper_arm_position;
+	Vector3 r_fore_arm_position;
+	Vector3 r_hand_position;
+	Vector3 stomach_position = getBonePosition(enemy, 4);
+	Vector3 pelvis_position = getBonePosition(enemy, 3);
+	Vector3 l_thigh_position;
+	Vector3 l_knee_position;
+	Vector3 l_foot_position;
+	Vector3 r_thigh_position;
+	Vector3 r_knee_position;
+	Vector3 r_foot_position;
+	if (enemy.bone_count == 102) { // MALE
+		neck_position = getBonePosition(enemy, 19);
+
+		l_upper_arm_position = getBonePosition(enemy, 21);
+		l_fore_arm_position = getBonePosition(enemy, 22);
+		l_hand_position = getBonePosition(enemy, 23);
+
+		r_upper_arm_position = getBonePosition(enemy, 47);
+		r_fore_arm_position = getBonePosition(enemy, 48);
+		r_hand_position = getBonePosition(enemy, 49);
+
+		l_thigh_position = getBonePosition(enemy, 75);
+		l_knee_position = getBonePosition(enemy, 76);
+		l_foot_position = getBonePosition(enemy, 78);
+
+		r_thigh_position = getBonePosition(enemy, 82);
+		r_knee_position = getBonePosition(enemy, 83);
+		r_foot_position = getBonePosition(enemy, 85);
+	}
+	else if (enemy.bone_count == 99) { // FEMALE
+		neck_position = getBonePosition(enemy, 19);
+
+		l_upper_arm_position = getBonePosition(enemy, 21);
+		l_fore_arm_position = getBonePosition(enemy, 40);
+		l_hand_position = getBonePosition(enemy, 42);
+
+		r_upper_arm_position = getBonePosition(enemy, 46);
+		r_fore_arm_position = getBonePosition(enemy, 65);
+		r_hand_position = getBonePosition(enemy, 67);
+
+		l_thigh_position = getBonePosition(enemy, 78);
+		l_knee_position = getBonePosition(enemy, 75);
+		l_foot_position = getBonePosition(enemy, 77);
+
+		r_thigh_position = getBonePosition(enemy, 80);
+		r_knee_position = getBonePosition(enemy, 82);
+		r_foot_position = getBonePosition(enemy, 84);
+	}
+	else if (enemy.bone_count == 103) { // BOT
+		neck_position = getBonePosition(enemy, 9);
+
+		l_upper_arm_position = getBonePosition(enemy, 33);
+		l_fore_arm_position = getBonePosition(enemy, 30);
+		l_hand_position = getBonePosition(enemy, 32);
+
+		r_upper_arm_position = getBonePosition(enemy, 58);
+		r_fore_arm_position = getBonePosition(enemy, 55);
+		r_hand_position = getBonePosition(enemy, 57);
+
+		l_thigh_position = getBonePosition(enemy, 63);
+		l_knee_position = getBonePosition(enemy, 65);
+		l_foot_position = getBonePosition(enemy, 69);
+
+		r_thigh_position = getBonePosition(enemy, 77);
+		r_knee_position = getBonePosition(enemy, 79);
+		r_foot_position = getBonePosition(enemy, 83);
+	}
+	else {
+		return;
+	}
+
+	renderBoneLine(head_position, neck_position, position, rotation, fov);
+	renderBoneLine(neck_position, chest_position, position, rotation, fov);
+	renderBoneLine(neck_position, l_upper_arm_position, position, rotation, fov);
+	renderBoneLine(l_upper_arm_position, l_fore_arm_position, position, rotation, fov);
+	renderBoneLine(l_fore_arm_position, l_hand_position, position, rotation, fov);
+	renderBoneLine(neck_position, r_upper_arm_position, position, rotation, fov);
+	renderBoneLine(r_upper_arm_position, r_fore_arm_position, position, rotation, fov);
+	renderBoneLine(r_fore_arm_position, r_hand_position, position, rotation, fov);
+	renderBoneLine(chest_position, stomach_position, position, rotation, fov);
+	renderBoneLine(stomach_position, pelvis_position, position, rotation, fov);
+	renderBoneLine(pelvis_position, l_thigh_position, position, rotation, fov);
+	renderBoneLine(l_thigh_position, l_knee_position, position, rotation, fov);
+	renderBoneLine(l_knee_position, l_foot_position, position, rotation, fov);
+	renderBoneLine(pelvis_position, r_thigh_position, position, rotation, fov);
+	renderBoneLine(r_thigh_position, r_knee_position, position, rotation, fov);
+	renderBoneLine(r_knee_position, r_foot_position, position, rotation, fov);
+}
+
+void renderBox(Vector2 head_at_screen, float distance_modifier) {
+	int head_x = head_at_screen.x;
+	int head_y = head_at_screen.y;
+	int start_x = head_x - 35 / distance_modifier;
+	int start_y = head_y - 15 / distance_modifier;
+	int end_x = head_x + 35 / distance_modifier;
+	int end_y = head_y + 155 / distance_modifier;
+	ImGui::GetOverlayDrawList()->AddRect(ImVec2(start_x, start_y), ImVec2(end_x, end_y), g_esp_color);
 }
 
 void renderEsp() {
@@ -280,11 +411,27 @@ void renderEsp() {
 			continue;
 		}
 
+		float last_render_time = Driver::read<float>(g_pid, enemy.mesh_ptr + 0x350);
+		float last_submit_time = Driver::read<float>(g_pid, enemy.mesh_ptr + 0x358);
+		bool is_visible = last_render_time + 0.06F >= last_submit_time;
+		bool dormant = Driver::read<bool>(g_pid, enemy.actor_ptr + 0x100);
+		if (dormant || !is_visible) {
+			continue;
+		}
+
 		Vector2 head_at_screen_vec = worldToScreen(head_position, camera_position, camera_rotation, camera_fov);
 		ImVec2 head_at_screen = ImVec2(head_at_screen_vec.x, head_at_screen_vec.y);
-		float distance_modifier = camera_position.Distance(head_position) * 0.001;
+		float distance_modifier = camera_position.Distance(head_position) * 0.001F;
 
-		ImGui::GetOverlayDrawList()->AddCircle(head_at_screen, 7 / distance_modifier, g_esp_color, 0, 3);
+		if (g_boneesp) {
+			renderBones(enemy, camera_position, camera_rotation, camera_fov);
+		}
+		if (g_headesp) {
+			ImGui::GetOverlayDrawList()->AddCircle(head_at_screen, 7 / distance_modifier, g_esp_color, 0, 3);
+		}
+		if (g_boxesp) {
+			renderBox(head_at_screen_vec, distance_modifier);
+		}
 	}
 }
 
@@ -295,7 +442,9 @@ void runRenderTick() {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
-	renderEsp();
+	if (g_esp_enabled) {
+		renderEsp();
+	}
 
 	if (g_overlay_visible) {
 		// Visuals Window
@@ -304,13 +453,16 @@ void runRenderTick() {
 			static int counter = 0;
 
 			ImGui::Begin("Visuals", nullptr, ImGuiWindowFlags_NoResize);
+			ImGui::SetWindowSize("Visuals", ImVec2(200, 148));
 
 			ImGui::Checkbox("ESP", &g_esp_enabled);
-
+			ImGui::Checkbox("Head ESP", &g_headesp);
+			ImGui::Checkbox("Bone ESP", &g_boneesp);
+			ImGui::Checkbox("Box ESP", &g_boxesp);
 			ImGui::End();
 		}
 	}
-
+	
 	ImGui::Render();
 	int display_w, display_h;
 	glfwGetFramebufferSize(g_window, &display_w, &display_h);
