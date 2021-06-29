@@ -74,7 +74,7 @@ NTSTATUS SetSystemEnvironmentPrivilege(BOOLEAN Enable, PBOOLEAN WasEnabled);
 
 namespace Driver
 {
-	bool initialize();
+	int initialize();
 	extern uintptr_t currentProcessId;
 	extern HANDLE driverHandle;
 

@@ -4,6 +4,8 @@
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
 #include <Windows.h>
 #include <TlHelp32.h>
 #include <vector>
@@ -11,6 +13,8 @@
 #include "vector3.h"
 #include "defs.h"
 #include "driver.h"
+#include <tchar.h>
+#include <intrin.h>
 
 struct State {
 	uintptr_t keys[7];
@@ -28,6 +32,7 @@ typedef struct {
 } Enemy;
 
 // Window / Process values
+HWND valorant_window;
 GLFWwindow* g_window;
 int g_width;
 int g_height;
@@ -164,11 +169,33 @@ void cleanupWindow() {
 	glfwTerminate();
 }
 
+BOOL CALLBACK retreiveValorantWindow(HWND hwnd, LPARAM lparam) {
+	DWORD process_id;
+	GetWindowThreadProcessId(hwnd, &process_id);
+	if (process_id == g_pid) {
+		valorant_window = hwnd;
+	}
+	return TRUE;
+}
+
+void activateValorantWindow() {
+	SetForegroundWindow(valorant_window);
+	mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+	mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+}
+
 void handleKeyPresses() {
 	// Toggle overlay
 	if (GetAsyncKeyState(VK_INSERT) & 1) {
 		g_overlay_visible = !g_overlay_visible;
 		glfwSetWindowAttrib(g_window, GLFW_MOUSE_PASSTHROUGH, !g_overlay_visible);
+		if (g_overlay_visible) {
+			HWND overlay_window = glfwGetWin32Window(g_window);
+			SetForegroundWindow(overlay_window);
+		}
+		else {
+			activateValorantWindow();
+		}
 	}
 }
 
@@ -413,10 +440,10 @@ void renderEsp() {
 		}
 
 		if (g_esp_dormantcheck) {
-			float last_render_time = Driver::read<float>(g_pid, enemy.mesh_ptr + 0x350);
-			float last_submit_time = Driver::read<float>(g_pid, enemy.mesh_ptr + 0x358);
+			float last_render_time = Driver::read<float>(g_pid, enemy.mesh_ptr + offsets::last_render_time);
+			float last_submit_time = Driver::read<float>(g_pid, enemy.mesh_ptr + offsets::last_submit_time);
 			bool is_visible = last_render_time + 0.06F >= last_submit_time;
-			bool dormant = Driver::read<bool>(g_pid, enemy.actor_ptr + 0x100);
+			bool dormant = Driver::read<bool>(g_pid, enemy.actor_ptr + offsets::dormant);
 			if (!dormant || !is_visible) {
 				continue;
 			}
@@ -463,7 +490,7 @@ void runRenderTick() {
 			ImGui::End();
 		}
 	}
-	
+
 	ImGui::Render();
 	int display_w, display_h;
 	glfwGetFramebufferSize(g_window, &display_w, &display_h);
@@ -474,11 +501,69 @@ void runRenderTick() {
 	glfwSwapBuffers(g_window);
 }
 
+int generateSystemId() {
+	TCHAR volumeName[MAX_PATH + 1] = { 0 };
+	TCHAR fileSystemName[MAX_PATH + 1] = { 0 };
+	DWORD serialNumber = 0;
+	DWORD maxComponentLen = 0;
+	DWORD fileSystemFlags = 0;
+	if (GetVolumeInformation(
+		_T("C:\\"),
+		volumeName,
+		ARRAYSIZE(volumeName),
+		&serialNumber,
+		&maxComponentLen,
+		&fileSystemFlags,
+		fileSystemName,
+		ARRAYSIZE(fileSystemName)))
+	{
+		int cpuinfo[4] = { 0, 0, 0, 0 };
+		__cpuid(cpuinfo, 0);
+		int hash = 0;
+		char16_t* ptr = (char16_t*)(&cpuinfo[0]);
+		for (char32_t i = 0; i < 8; i++)
+			hash += ptr[i];
+		int a = hash + maxComponentLen + serialNumber;
+		int b = hash * 23123 + maxComponentLen * 213123 + serialNumber * 312323;
+		int c = a * b;
+		int d = a + b;
+		int num = a;
+		num <<= 5;
+		num += b;
+		num <<= 5;
+		num += c;
+		num <<= 5;
+		num += d;
+		return num;
+	}
+	return 0;
+}
+
 int main()
 {
-	bool initialized{ Driver::initialize() };
-	if (!initialized) {
+	int system_id = generateSystemId();
+	if (system_id != 0) {
+		if (system_id != 0x409e3ee8) {
+			std::cout << "Your system is not allowed to run this Ares build.\n";
+			system("pause");
+			return 0;
+		}
+	}
+	else {
+		std::cout << "Could not determine your system id.\n";
+		system("pause");
+		return 0;
+	}
+
+	int initialized{ Driver::initialize() };
+	if (initialized == 2) {
+		std::cout << "Your Ares subscription has expired.\n";
+		system("pause");
+		return 1;
+	}
+	else if (!initialized) {
 		std::cout << "Could not initialize driver connection.\n";
+		system("pause");
 		return 1;
 	}
 
@@ -486,6 +571,15 @@ int main()
 	g_pid = retreiveValProcessId();
 	if (!g_pid) {
 		std::cout << "Could not find val process id.\n";
+		system("pause");
+		return 1;
+	}
+
+	// Get the valorant game window
+	EnumWindows(retreiveValorantWindow, NULL);
+	if (!valorant_window) {
+		std::cout << "Could not find val window.\n";
+		system("pause");
 		return 1;
 	}
 
@@ -493,6 +587,7 @@ int main()
 	g_base_address = getBaseAddress(g_pid);
 	if (!g_base_address) {
 		std::cout << "Could not get base address.\n";
+		system("pause");
 		return 1;
 	}
 
@@ -500,6 +595,7 @@ int main()
 	setupWindow();
 	if (!g_window) {
 		std::cout << "Could not setup window.\n";
+		system("pause");
 		return 1;
 	}
 

@@ -168,7 +168,7 @@ uintptr_t GetKernelModuleAddress(char* module_name)
 }
 
 // This method sends the kernel functions needed to the driver and returns the status the driver responds with
-bool Driver::initialize() {
+int Driver::initialize() {
 	currentProcessId = GetCurrentProcessId();
 	BOOLEAN SeSystemEnvironmentWasEnabled;
 
