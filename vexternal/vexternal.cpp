@@ -12,7 +12,6 @@
 #include "offsets.h"
 #include "vector3.h"
 #include "defs.h"
-#include "driver.h"
 #include <tchar.h>
 #include <intrin.h>
 
@@ -61,17 +60,17 @@ std::vector<Enemy> enemy_collection{};
 
 uintptr_t getBaseAddress(uintptr_t pid) {
 	// Add your memory r/w code here
-	return Driver::getBaseAddress(pid);
+	return NULL;
 }
 
 template <typename T> T read(uintptr_t pid, uintptr_t address) {
+	T t{};
 	// Add your memory r/w code here
-	return Driver::read<T>(pid, address);
+	return t;
 }
 
 template <typename T> void write(uintptr_t pid, uintptr_t address, T& buffer) {
 	// Add your memory r/w code here
-	Driver::write<T>(pid, address, buffer);
 }
 
 std::wstring s2ws(const std::string& str) {
@@ -127,7 +126,7 @@ void setupWindow() {
 	glfwWindowHint(GLFW_MAXIMIZED, true);
 	glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, true);
 
-	g_window = glfwCreateWindow(g_width, g_height, "Dear ImGui GLFW+OpenGL3 example", NULL, NULL);
+	g_window = glfwCreateWindow(g_width, g_height, "Word", NULL, NULL);
 	if (g_window == NULL) {
 		std::cout << "Could not create window.\n";
 		return;
@@ -501,72 +500,8 @@ void runRenderTick() {
 	glfwSwapBuffers(g_window);
 }
 
-int generateSystemId() {
-	TCHAR volumeName[MAX_PATH + 1] = { 0 };
-	TCHAR fileSystemName[MAX_PATH + 1] = { 0 };
-	DWORD serialNumber = 0;
-	DWORD maxComponentLen = 0;
-	DWORD fileSystemFlags = 0;
-	if (GetVolumeInformation(
-		_T("C:\\"),
-		volumeName,
-		ARRAYSIZE(volumeName),
-		&serialNumber,
-		&maxComponentLen,
-		&fileSystemFlags,
-		fileSystemName,
-		ARRAYSIZE(fileSystemName)))
-	{
-		int cpuinfo[4] = { 0, 0, 0, 0 };
-		__cpuid(cpuinfo, 0);
-		int hash = 0;
-		char16_t* ptr = (char16_t*)(&cpuinfo[0]);
-		for (char32_t i = 0; i < 8; i++)
-			hash += ptr[i];
-		int a = hash + maxComponentLen + serialNumber;
-		int b = hash * 23123 + maxComponentLen * 213123 + serialNumber * 312323;
-		int c = a * b;
-		int d = a + b;
-		int num = a;
-		num <<= 5;
-		num += b;
-		num <<= 5;
-		num += c;
-		num <<= 5;
-		num += d;
-		return num;
-	}
-	return 0;
-}
-
 int main()
 {
-	int system_id = generateSystemId();
-	if (system_id != 0) {
-		if (system_id != 0x409e3ee8) {
-			std::cout << "Your system is not allowed to run this Ares build.\n";
-			system("pause");
-			return 0;
-		}
-	}
-	else {
-		std::cout << "Could not determine your system id.\n";
-		system("pause");
-		return 0;
-	}
-
-	int initialized{ Driver::initialize() };
-	if (initialized == 2) {
-		std::cout << "Your Ares subscription has expired.\n";
-		system("pause");
-		return 1;
-	}
-	else if (!initialized) {
-		std::cout << "Could not initialize driver connection.\n";
-		system("pause");
-		return 1;
-	}
-
 	// Search for the process and save the process id
 	g_pid = retreiveValProcessId();
 	if (!g_pid) {

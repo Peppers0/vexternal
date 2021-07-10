@@ -155,7 +155,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="driver.cpp" />
     <ClCompile Include="include\imgui\imgui.cpp" />
     <ClCompile Include="include\imgui\imgui_demo.cpp" />
     <ClCompile Include="include\imgui\imgui_draw.cpp" />
@@ -167,7 +166,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="defs.h" />
-    <ClInclude Include="driver.h" />
     <ClInclude Include="offsets.h" />
     <ClInclude Include="vector3.h" />
   </ItemGroup>
